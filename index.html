@@ -13,8 +13,8 @@
     body { font-family: 'Prompt', sans-serif; }
   </style>
 </head>
-<body class="bg-gray-100 min-h-screen p-4">
-  <div class="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden p-6 space-y-4">
+<body class="bg-gray-100 min-h-screen p-3 md:p-6">
+  <div class="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden p-5 space-y-5">
     
     <div class="text-center space-y-1">
       <h1 class="text-2xl font-bold text-blue-700">📦 ระบบเช็ครายการแจกของ</h1>
@@ -26,7 +26,7 @@
       <label class="block text-sm font-medium text-gray-700">กรอกรหัสนักศึกษา หรือ ชื่อ-นามสกุล:</label>
       <div class="flex gap-2">
         <input type="text" id="searchInput" placeholder="เช่น 671610105 หรือ ชื่นกมล" disabled
-               class="flex-1 border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100">
+               class="flex-1 border rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100">
         <button onclick="handleSearch()" id="searchBtn" disabled
                 class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 active:scale-95 transition disabled:bg-gray-400">
           ค้นหา
@@ -40,16 +40,27 @@
       <p class="text-sm"><strong>ชื่อ-นามสกุล:</strong> <span id="stName">-</span></p>
       <p class="text-sm"><strong>รหัสนักศึกษา:</strong> <span id="stId" class="font-mono text-blue-700 font-bold">-</span></p>
       <p class="text-sm"><strong>เบอร์โทร:</strong> <span id="stPhone">-</span></p>
-      <p class="text-sm"><strong>ใบเสร็จทั้งหมด:</strong> <span id="stReceipt" class="font-bold text-blue-800">-</span></p>
+      <p class="text-sm"><strong>จำนวนใบเสร็จทั้งหมด:</strong> <span id="stReceiptCount" class="font-bold text-blue-800">-</span></p>
     </div>
 
-    <!-- รายการสินค้าที่ต้องหยิบ -->
-    <div id="itemsContainer" class="hidden space-y-2">
+    <!-- ส่วนที่ 1: รายการแยกตามใบเสร็จทุกใบ -->
+    <div id="receiptsContainer" class="hidden space-y-3">
+      <h2 class="font-semibold text-purple-800 text-lg flex items-center gap-1">
+        📄 รายละเอียดใบเสร็จทั้งหมด
+      </h2>
+      <div id="receiptList" class="space-y-3"></div>
+    </div>
+
+    <!-- ส่วนที่ 2: สรุปรายการรวมสำหรับคนเดินหยิบของ -->
+    <div id="itemsContainer" class="hidden space-y-3 pt-2 border-t border-gray-200">
       <div class="flex justify-between items-center">
-        <h2 class="font-semibold text-gray-800 text-lg">🛒 รายการที่ต้องหยิบ</h2>
-        <span class="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-0.5 rounded-full" id="itemCount">0 รายการ</span>
+        <h2 class="font-bold text-gray-800 text-lg flex items-center gap-1">
+          🛒 รายการสรุปสำหรับเดินหยิบ
+        </h2>
+        <span class="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-1 rounded-full" id="itemCount">0 ชิ้น</span>
       </div>
-      <div id="itemList" class="space-y-2"></div>
+      <p class="text-xs text-gray-500">จัดกลุ่มตามประเภทสินค้า เพื่อให้เดินไปรับที่เคาน์เตอร์ได้สะดวก</p>
+      <div id="itemList" class="space-y-3"></div>
     </div>
 
     <!-- ไม่พบข้อมูล -->
@@ -60,10 +71,9 @@
   </div>
 
   <script>
-    // ลิงก์ Published CSV ของ Google Sheets
     const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vScODA9rW6QK2xV9KnCz4PmLVGeIyBSSwvBj-qX1f325WOAygCgQnge_AUvTtwG_w/pub?output=csv";
     
-    // กำหนดลำดับการเรียงสินค้าตามที่ต้องการ
+    // กำหนดลำดับการเรียงสินค้าหมวดใหญ่
     const ITEM_ORDER = [
       "เสื้อโปโลเทา",
       "เสื้อเชิ้ตชมพู",
@@ -81,12 +91,11 @@
           return i;
         }
       }
-      return 99; // หากมีสินค้านอกเหนือจากลิสต์ให้ไปต่อท้ายสุด
+      return 99;
     }
 
     let rawData = [];
 
-    // ดึงข้อมูล CSV เมื่อเปิดหน้าเว็บ
     window.onload = function() {
       Papa.parse(CSV_URL, {
         download: true,
@@ -114,22 +123,20 @@
       }
 
       let studentInfo = null;
-      let itemMap = new Map(); // สำหรับรวมรายการชนิด/ไซส์เดียวกัน
-      let receipts = new Set();
+      let receiptsMap = new Map(); // เก็บรายการแยกตามใบเสร็จ
+      let categoryMap = new Map(); // เก็บรายการรวมจัดกลุ่มตามหมวดสินค้า
 
       let currentStudentId = "";
       let currentName = "";
       let currentPhone = "";
       let currentReceipt = "";
 
-      // ค้นหาในข้อมูล CSV
       rawData.forEach(row => {
-        const rawReceipt = row['เล่มที่/เลขที่ใบเสร็จ'] || row['เลขที่ใบเสร็จ'] || '';
+        const rawReceipt = (row['เล่มที่/เลขที่ใบเสร็จ'] || row['เลขที่ใบเสร็จ'] || '').trim();
         const rawName = (row['ชื่อ - นามสกุล'] || row['ชื่อ-นามสกุล'] || '').trim();
         const rawStudentId = String(row['รหัสนักศึกษา'] || '').trim();
-        const rawPhone = row['เบอร์โทร'] || row['เบอร์โทรศัพท์'] || '';
+        const rawPhone = (row['เบอร์โทร'] || row['เบอร์โทรศัพท์'] || '').trim();
         
-        // Remember last values (Forward Fill)
         if (rawStudentId !== "") currentStudentId = rawStudentId;
         if (rawName !== "") currentName = rawName;
         if (rawPhone !== "") currentPhone = rawPhone;
@@ -139,7 +146,6 @@
         const size = (row['ไซส์'] || '-').trim();
         const qty = parseInt(row['จำนวน'] || '0', 10);
 
-        // เช็คว่าตรงกับคำค้นหาหรือไม่
         if (currentStudentId.toLowerCase().includes(keyword) || currentName.toLowerCase().includes(keyword)) {
           if (!studentInfo && (currentStudentId || currentName)) {
             studentInfo = { 
@@ -149,79 +155,122 @@
             };
           }
 
-          if (currentReceipt) {
-            receipts.add(currentReceipt);
-          }
-
-          // เก็บรายการเฉพาะที่ จำนวน > 0
           if (qty > 0 && itemName !== "") {
-            const key = `${itemName}_${size}`;
-            if (itemMap.has(key)) {
-              let existing = itemMap.get(key);
-              existing.qty += qty;
-              if (currentReceipt) existing.receipts.add(currentReceipt);
+            // 1. แยกตามใบเสร็จ
+            if (!receiptsMap.has(currentReceipt)) {
+              receiptsMap.set(currentReceipt, []);
+            }
+            receiptsMap.get(currentReceipt).push({ itemName, size, qty });
+
+            // 2. จัดกลุ่มตามประเภทสินค้าใหญ่สำหรับสรุป
+            if (!categoryMap.has(itemName)) {
+              categoryMap.set(itemName, new Map());
+            }
+            let sizeMap = categoryMap.get(itemName);
+            if (sizeMap.has(size)) {
+              sizeMap.set(size, sizeMap.get(size) + qty);
             } else {
-              let rSet = new Set();
-              if (currentReceipt) rSet.add(currentReceipt);
-              itemMap.set(key, {
-                itemName: itemName,
-                size: size,
-                qty: qty,
-                receipts: rSet
-              });
+              sizeMap.set(size, qty);
             }
           }
         }
       });
 
-      // แปลง Map เป็น Array แล้วจัดเรียงตามลำดับสินค้าที่กำหนด
-      let items = Array.from(itemMap.values());
-      items.sort((a, b) => {
-        const rankA = getItemRank(a.itemName);
-        const rankB = getItemRank(b.itemName);
-        if (rankA !== rankB) {
-          return rankA - rankB;
-        }
-        return a.itemName.localeCompare(b.itemName, 'th');
-      });
-
       // ซ่อน/แสดง UI
       document.getElementById('studentCard').classList.add('hidden');
+      document.getElementById('receiptsContainer').classList.add('hidden');
       document.getElementById('itemsContainer').classList.add('hidden');
       document.getElementById('notFound').classList.add('hidden');
 
-      if (studentInfo && items.length > 0) {
+      if (studentInfo && receiptsMap.size > 0) {
         // แสดงข้อมูลผู้สั่งซื้อ
         document.getElementById('stName').innerText = studentInfo.name || '-';
         document.getElementById('stId').innerText = studentInfo.studentId || '-';
         document.getElementById('stPhone').innerText = studentInfo.phone || '-';
-        document.getElementById('stReceipt').innerText = Array.from(receipts).join(', ') || '-';
+        document.getElementById('stReceiptCount').innerText = `${receiptsMap.size} ใบเสร็จ`;
         document.getElementById('studentCard').classList.remove('hidden');
 
-        // แสดงรายการที่ต้องหยิบ
+        // ----------------------------------------------------
+        // 1. สร้างการ์ดแสดงตามใบเสร็จแต่ละใบ
+        // ----------------------------------------------------
+        const receiptList = document.getElementById('receiptList');
+        receiptList.innerHTML = '';
+
+        receiptsMap.forEach((itemsInRc, rcNumber) => {
+          const rcCard = document.createElement('div');
+          rcCard.className = "bg-purple-50 p-3.5 rounded-lg border border-purple-200 space-y-2";
+          
+          let itemsHtml = itemsInRc.map(it => `
+            <div class="flex justify-between items-center text-sm py-1 border-b border-purple-100 last:border-0">
+              <span class="text-gray-800 font-medium">${it.itemName} <span class="text-xs text-gray-500 bg-white px-1.5 py-0.5 rounded border border-purple-200">ไซส์: ${it.size}</span></span>
+              <span class="font-bold text-purple-700">x ${it.qty}</span>
+            </div>
+          `).join('');
+
+          rcCard.innerHTML = `
+            <div class="flex justify-between items-center border-b border-purple-200 pb-1.5">
+              <span class="font-bold text-purple-900 text-sm">🧾 ใบเสร็จเลขที่: ${rcNumber || 'ไม่ระบุ'}</span>
+              <span class="text-xs bg-purple-200 text-purple-800 px-2 py-0.5 rounded-full font-semibold">${itemsInRc.length} รายการ</span>
+            </div>
+            <div class="pt-1">${itemsHtml}</div>
+          `;
+          receiptList.appendChild(rcCard);
+        });
+        document.getElementById('receiptsContainer').classList.remove('hidden');
+
+        // ----------------------------------------------------
+        // 2. สร้างกรอบหมวดหมู่สินค้าใหญ่สำหรับหยิบของ
+        // ----------------------------------------------------
         const itemList = document.getElementById('itemList');
         itemList.innerHTML = '';
-        
-        let totalItemsQty = items.reduce((sum, item) => sum + item.qty, 0);
-        document.getElementById('itemCount').innerText = `${items.length} ชนิด (${totalItemsQty} ชิ้น)`;
 
-        items.forEach(item => {
-          const rcList = Array.from(item.receipts).join(', ');
-          const card = document.createElement('div');
-          card.className = "flex items-center justify-between bg-white p-3.5 rounded-lg border shadow-sm border-gray-200 hover:border-blue-400";
-          card.innerHTML = `
-            <div>
-              <p class="font-bold text-gray-800 text-base">${item.itemName}</p>
-              <p class="text-sm text-gray-500">ไซส์: <span class="font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded">${item.size}</span> <span class="text-xs text-gray-400 ml-1">(ใบเสร็จ: ${rcList})</span></p>
-            </div>
-            <div class="text-right">
-              <span class="text-xl font-bold text-green-600 bg-green-50 px-3 py-1 rounded-lg border border-green-200">x ${item.qty}</span>
-            </div>
-          `;
-          itemList.appendChild(card);
+        // จัดเรียงหมวดหมู่ตามลำดับที่กำหนด
+        let sortedCategories = Array.from(categoryMap.keys()).sort((a, b) => {
+          const rankA = getItemRank(a);
+          const rankB = getItemRank(b);
+          if (rankA !== rankB) return rankA - rankB;
+          return a.localeCompare(b, 'th');
         });
 
+        let totalOverallQty = 0;
+
+        sortedCategories.forEach(catName => {
+          const sizeMap = categoryMap.get(catName);
+          let catTotalQty = 0;
+          let sizesHtml = '';
+
+          sizeMap.forEach((qty, size) => {
+            catTotalQty += qty;
+            totalOverallQty += qty;
+            sizesHtml += `
+              <div class="flex items-center justify-between bg-gray-50 p-2.5 rounded-md border border-gray-200">
+                <span class="text-sm font-semibold text-gray-700">ไซส์: <span class="text-base font-bold text-blue-700 bg-white px-2 py-0.5 rounded border border-gray-300">${size}</span></span>
+                <span class="text-lg font-extrabold text-green-600 bg-green-50 px-3 py-0.5 rounded border border-green-200">x ${qty}</span>
+              </div>
+            `;
+          });
+
+          const groupCard = document.createElement('div');
+          groupCard.className = "bg-white p-4 rounded-xl border-2 border-blue-500 shadow-sm space-y-2.5";
+          groupCard.innerHTML = `
+            <div class="flex justify-between items-center border-b-2 border-blue-100 pb-2">
+              <h3 class="font-bold text-blue-900 text-base flex items-center gap-1.5">
+                🏷️ ${catName}
+              </h3>
+              <span class="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-md">
+                รวม ${catTotalQty} ชิ้น
+              </span>
+            </div>
+            <div class="grid grid-cols-1 gap-2 pt-1">
+              ${sizesHtml}
+            </div>
+          `;
+          itemList.appendChild(groupCard);
+        });
+
+        document.getElementById('itemCount').innerText = `รวมทั้งหมด ${totalOverallQty} ชิ้น`;
         document.getElementById('itemsContainer').classList.remove('hidden');
+
       } else {
         document.getElementById('notFound').classList.remove('hidden');
       }
