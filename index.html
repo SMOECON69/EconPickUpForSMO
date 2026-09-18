@@ -143,6 +143,7 @@
         if (rawReceipt !== "") currentReceipt = rawReceipt;
 
         const itemName = (row['รายการ'] || '').trim();
+        const note = (row['หมายเหตุ'] || '').trim(); // อ่านค่าจากคอลัมน์หมายเหตุ (เช่น รหัส 69)
         const size = (row['ไซส์'] || '-').trim();
         const qty = parseInt(row['จำนวน'] || '0', 10);
 
@@ -160,17 +161,20 @@
             if (!receiptsMap.has(currentReceipt)) {
               receiptsMap.set(currentReceipt, []);
             }
-            receiptsMap.get(currentReceipt).push({ itemName, size, qty });
+            receiptsMap.get(currentReceipt).push({ itemName, size, note, qty });
 
             // 2. จัดกลุ่มตามประเภทสินค้าใหญ่สำหรับสรุป
             if (!categoryMap.has(itemName)) {
               categoryMap.set(itemName, new Map());
             }
             let sizeMap = categoryMap.get(itemName);
-            if (sizeMap.has(size)) {
-              sizeMap.set(size, sizeMap.get(size) + qty);
+            
+            // รวม คีย์จาก Size + Note เพื่อแยกรหัสปี (เช่น M_รหัส 69)
+            const subKey = `${size}___${note}`;
+            if (sizeMap.has(subKey)) {
+              sizeMap.set(subKey, sizeMap.get(subKey) + qty);
             } else {
-              sizeMap.set(size, qty);
+              sizeMap.set(subKey, qty);
             }
           }
         }
@@ -200,12 +204,19 @@
           const rcCard = document.createElement('div');
           rcCard.className = "bg-purple-50 p-3.5 rounded-lg border border-purple-200 space-y-2";
           
-          let itemsHtml = itemsInRc.map(it => `
-            <div class="flex justify-between items-center text-sm py-1 border-b border-purple-100 last:border-0">
-              <span class="text-gray-800 font-medium">${it.itemName} <span class="text-xs text-gray-500 bg-white px-1.5 py-0.5 rounded border border-purple-200">ไซส์: ${it.size}</span></span>
-              <span class="font-bold text-purple-700">x ${it.qty}</span>
-            </div>
-          `).join('');
+          let itemsHtml = itemsInRc.map(it => {
+            const noteTag = it.note ? `<span class="ml-1 px-1.5 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-bold rounded border border-yellow-300">${it.note}</span>` : '';
+            return `
+              <div class="flex justify-between items-center text-sm py-1 border-b border-purple-100 last:border-0">
+                <span class="text-gray-800 font-medium">
+                  ${it.itemName} 
+                  <span class="text-xs text-gray-500 bg-white px-1.5 py-0.5 rounded border border-purple-200">ไซส์: ${it.size}</span>
+                  ${noteTag}
+                </span>
+                <span class="font-bold text-purple-700">x ${it.qty}</span>
+              </div>
+            `;
+          }).join('');
 
           rcCard.innerHTML = `
             <div class="flex justify-between items-center border-b border-purple-200 pb-1.5">
@@ -224,7 +235,6 @@
         const itemList = document.getElementById('itemList');
         itemList.innerHTML = '';
 
-        // จัดเรียงหมวดหมู่ตามลำดับที่กำหนด
         let sortedCategories = Array.from(categoryMap.keys()).sort((a, b) => {
           const rankA = getItemRank(a);
           const rankB = getItemRank(b);
@@ -239,12 +249,19 @@
           let catTotalQty = 0;
           let sizesHtml = '';
 
-          sizeMap.forEach((qty, size) => {
+          sizeMap.forEach((qty, subKey) => {
             catTotalQty += qty;
             totalOverallQty += qty;
+            
+            const [size, note] = subKey.split('___');
+            const noteBadge = note ? `<span class="ml-2 px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-bold rounded border border-yellow-300">📌 ${note}</span>` : '';
+
             sizesHtml += `
               <div class="flex items-center justify-between bg-gray-50 p-2.5 rounded-md border border-gray-200">
-                <span class="text-sm font-semibold text-gray-700">ไซส์: <span class="text-base font-bold text-blue-700 bg-white px-2 py-0.5 rounded border border-gray-300">${size}</span></span>
+                <div class="flex items-center">
+                  <span class="text-sm font-semibold text-gray-700">ไซส์: <span class="text-base font-bold text-blue-700 bg-white px-2 py-0.5 rounded border border-gray-300">${size}</span></span>
+                  ${noteBadge}
+                </div>
                 <span class="text-lg font-extrabold text-green-600 bg-green-50 px-3 py-0.5 rounded border border-green-200">x ${qty}</span>
               </div>
             `;
