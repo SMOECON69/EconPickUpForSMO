@@ -74,9 +74,8 @@
   </div>
 
   <script>
-    // ดึงข้อมูลชีต1 และ Sheet2
-    const CSV_URL_SHEET1 = "https://docs.google.com/spreadsheets/d/e/2PACX-1vScODA9rW6QK2xV9KnCz4PmLVGeIyBSSwvBj-qX1f325WOAygCgQnge_AUvTtwG_w/pub?sheet=%E0%B8%8A%E0%B8%B5%E0%B8%951&output=csv";
-    const CSV_URL_SHEET2 = "https://docs.google.com/spreadsheets/d/e/2PACX-1vScODA9rW6QK2xV9KnCz4PmLVGeIyBSSwvBj-qX1f325WOAygCgQnge_AUvTtwG_w/pub?sheet=Sheet2&output=csv";
+    // ดึงข้อมูลชีต1 โดยตรง
+    const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vScODA9rW6QK2xV9KnCz4PmLVGeIyBSSwvBj-qX1f325WOAygCgQnge_AUvTtwG_w/pub?output=csv";
     
     const ITEM_ORDER = [
       "เสื้อโปโลเทา",
@@ -98,10 +97,9 @@
       return 99;
     }
 
-    let sheet1Data = [];
-    let orderMapSheet2 = new Map();
+    let sheetData = [];
 
-    // ฟังก์ชันช่วยหาค่าจาก object โดยไม่เกี่ยง BOM หรือเว้นวรรค
+    // ฟังก์ชันช่วยหาค่าจาก object โดยรองรับชื่อคอลัมน์หลากรูปแบบและแก้ปัญหาอักขระ BOM
     function getVal(row, possibleKeys) {
       for (let k in row) {
         const cleanK = k.replace(/^\uFEFF/, '').trim();
@@ -115,57 +113,23 @@
     }
 
     window.onload = function() {
-      // 1. ดึง Sheet2 เพื่อเอา "ลำดับ" อย่างเดียว
-      Papa.parse(CSV_URL_SHEET2, {
+      Papa.parse(CSV_URL, {
         download: true,
         header: true,
         skipEmptyLines: true,
-        complete: function(res2) {
-          let currOrder = "";
-          let currId = "";
-          let currName = "";
-
-          res2.data.forEach(row => {
-            const rawOrder = getVal(row, ['ลำดับ', 'ลำดับที่', 'no', 'no.']);
-            const rawId = getVal(row, ['รหัสนักศึกษา']);
-            const rawName = getVal(row, ['ชื่อ - นามสกุล', 'ชื่อ-นามสกุล', 'ชื่อ']);
-
-            if (rawOrder !== "") currOrder = rawOrder;
-            if (rawId !== "") currId = rawId;
-            if (rawName !== "") currName = rawName;
-
-            if (currOrder !== "") {
-              if (currId !== "") orderMapSheet2.set(`id_${currId.toLowerCase()}`, currOrder);
-              if (currName !== "") orderMapSheet2.set(`name_${currName.toLowerCase()}`, currOrder);
-            }
-          });
-
-          loadSheet1();
-        },
-        error: function() {
-          loadSheet1();
-        }
-      });
-    };
-
-    function loadSheet1() {
-      Papa.parse(CSV_URL_SHEET1, {
-        download: true,
-        header: true,
-        skipEmptyLines: true,
-        complete: function(res1) {
-          sheet1Data = res1.data;
+        complete: function(res) {
+          sheetData = res.data;
           document.getElementById('dataStatus').innerText = "🟢 พร้อมใช้งาน (โหลดข้อมูลเรียบร้อย)";
           document.getElementById('dataStatus').classList.replace('text-gray-500', 'text-green-600');
           document.getElementById('searchInput').disabled = false;
           document.getElementById('searchBtn').disabled = false;
         },
         error: function(err) {
-          document.getElementById('dataStatus').innerText = "🔴 ไม่สามารถโหลดข้อมูลได้";
+          document.getElementById('dataStatus').innerText = "🔴 ไม่สามารถโหลดข้อมูลได้ กรุณารีเฟรชหน้าเว็บ";
           document.getElementById('dataStatus').classList.replace('text-gray-500', 'text-red-600');
         }
       });
-    }
+    };
 
     function handleSearch() {
       const keyword = document.getElementById('searchInput').value.trim().toLowerCase();
@@ -178,20 +142,23 @@
       let receiptsMap = new Map();
       let categoryMap = new Map();
 
+      let currentOrderNo = "";
       let currentDate = "";
       let currentReceipt = "";
       let currentName = "";
       let currentStudentId = "";
       let currentPhone = "";
 
-      sheet1Data.forEach(row => {
+      sheetData.forEach(row => {
+        const rawOrderNo = getVal(row, ['ลำดับ', 'ลำดับที่', 'no', 'no.']);
         const rawDate = getVal(row, ['ว/ด/ป', 'วันที่', 'วัน/เดือน/ปี']);
         const rawReceipt = getVal(row, ['เล่มที่/เลขที่ใบเสร็จ', 'เลขที่ใบเสร็จ', 'ใบเสร็จ']);
         const rawName = getVal(row, ['ชื่อ - นามสกุล', 'ชื่อ-นามสกุล', 'ชื่อ']);
         const rawStudentId = getVal(row, ['รหัสนักศึกษา']);
         const rawPhone = getVal(row, ['เบอร์โทร', 'เบอร์โทรศัพท์']);
 
-        // Forward fill
+        // Forward fill สำหรับช่องเว้นว่าง
+        if (rawOrderNo !== "") currentOrderNo = rawOrderNo;
         if (rawDate !== "") currentDate = rawDate;
         if (rawReceipt !== "") currentReceipt = rawReceipt;
         if (rawName !== "") currentName = rawName;
@@ -206,13 +173,8 @@
 
         if (currentStudentId.toLowerCase().includes(keyword) || currentName.toLowerCase().includes(keyword)) {
           if (!studentInfo && (currentStudentId || currentName)) {
-            // ค้นหาลำดับจาก Sheet2
-            let matchedOrder = orderMapSheet2.get(`id_${currentStudentId.toLowerCase()}`) || 
-                               orderMapSheet2.get(`name_${currentName.toLowerCase()}`) || 
-                               "-";
-
             studentInfo = { 
-              orderNo: matchedOrder,
+              orderNo: currentOrderNo || "-",
               name: currentName, 
               studentId: currentStudentId, 
               phone: currentPhone 
