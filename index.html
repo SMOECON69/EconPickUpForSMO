@@ -25,7 +25,7 @@
     <div class="space-y-2">
       <label class="block text-sm font-medium text-gray-700">กรอกรหัสนักศึกษา หรือ ชื่อ-นามสกุล:</label>
       <div class="flex gap-2">
-        <input type="text" id="searchInput" placeholder="เช่น 671610105 หรือ ชื่นกมล" disabled
+        <input type="text" id="searchInput" placeholder="เช่น 661610009 หรือ กชกร" disabled
                class="flex-1 border rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100">
         <button onclick="handleSearch()" id="searchBtn" disabled
                 class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 active:scale-95 transition disabled:bg-gray-400">
@@ -137,20 +137,14 @@
       let currentPhone = "";
       let currentReceipt = "";
 
-      rawData.forEach((row, index) => {
-        // ค้นหาคอลัมน์ ลำดับ อัตโนมัติจากทุกชื่อที่เป็นไปได้
+      rawData.forEach(row => {
+        // ดึงคอลัมน์ ลำดับ โดยมองหาคำว่า ลำดับ หรือ ลำดับที่
         let rawOrderNo = "";
         for (let key in row) {
-          const cleanKey = key.trim().toLowerCase();
-          if (cleanKey === 'ลำดับ' || cleanKey === 'ลำดับที่' || cleanKey === 'no' || cleanKey === 'no.' || cleanKey === 'ที่') {
+          if (key.trim().includes('ลำดับ')) {
             rawOrderNo = String(row[key] || '').trim();
             break;
           }
-        }
-        
-        // ถ้าไม่มีคอลัมน์ลำดับ ให้ใช้ดัชนีแถว + 1
-        if (rawOrderNo === "" && currentOrderNo === "") {
-          rawOrderNo = String(index + 1);
         }
 
         const rawDate = (row['ว/ด/ป'] || row['วันที่'] || row['วัน/เดือน/ปี'] || '').trim();
@@ -159,7 +153,7 @@
         const rawStudentId = String(row['รหัสนักศึกษา'] || '').trim();
         const rawPhone = (row['เบอร์โทร'] || row['เบอร์โทรศัพท์'] || '').trim();
         
-        // Forward fill สำหรับแถวเว้นว่าง
+        // Forward fill: ถ้าแถวนั้นมีเลขลำดับ/ชื่อใหม่ ให้สลับไปจำค่าใหม่ทันที
         if (rawOrderNo !== "") currentOrderNo = rawOrderNo;
         if (rawDate !== "") currentDate = rawDate;
         if (rawStudentId !== "") currentStudentId = rawStudentId;
@@ -215,8 +209,8 @@
       document.getElementById('notFound').classList.add('hidden');
 
       if (studentInfo && receiptsMap.size > 0) {
-        // แสดงข้อมูลผู้สั่งซื้อ พร้อม "ลำดับที่"
-        document.getElementById('stOrderNo').innerText = `ลำดับที่ ${studentInfo.orderNo}`;
+        // แสดงข้อมูลผู้สั่งซื้อ พร้อม "ลำดับที่" ที่ตรงกับใน Sheet จริง
+        document.getElementById('stOrderNo').innerText = `ลำดับที่ ${studentInfo.orderNo || '-'}`;
         document.getElementById('stName').innerText = studentInfo.name || '-';
         document.getElementById('stId').innerText = studentInfo.studentId || '-';
         document.getElementById('stPhone').innerText = studentInfo.phone || '-';
@@ -224,7 +218,7 @@
         document.getElementById('studentCard').classList.remove('hidden');
 
         // ----------------------------------------------------
-        // 1. สร้างการ์ดแสดงตามใบเสร็จแต่ละใบ (พร้อมวันที่)
+        // 1. สร้างการ์ดแสดงตามใบเสร็จแต่ละใบ
         // ----------------------------------------------------
         const receiptList = document.getElementById('receiptList');
         receiptList.innerHTML = '';
