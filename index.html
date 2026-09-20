@@ -25,7 +25,7 @@
     <div class="space-y-2">
       <label class="block text-sm font-medium text-gray-700">กรอกรหัสนักศึกษา หรือ ชื่อ-นามสกุล:</label>
       <div class="flex gap-2">
-        <input type="text" id="searchInput" placeholder="เช่น 661610009 หรือ กชกร" disabled
+        <input type="text" id="searchInput" placeholder="เช่น 671610105 หรือ ป้าหน่อย" disabled
                class="flex-1 border rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100">
         <button onclick="handleSearch()" id="searchBtn" disabled
                 class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 active:scale-95 transition disabled:bg-gray-400">
@@ -74,10 +74,10 @@
   </div>
 
   <script>
-    // ดึงข้อมูล Published CSV เฉพาะ Sheet2
-    const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vScODA9rW6QK2xV9KnCz4PmLVGeIyBSSwvBj-qX1f325WOAygCgQnge_AUvTtwG_w/pub?sheet=Sheet2&output=csv";
+    // URL สำหรับดึงข้อมูลจาก ชีต 1 และ Sheet2 พร้อมกัน
+    const CSV_URL_SHEET1 = "https://docs.google.com/spreadsheets/d/e/2PACX-1vScODA9rW6QK2xV9KnCz4PmLVGeIyBSSwvBj-qX1f325WOAygCgQnge_AUvTtwG_w/pub?sheet=%E0%B8%8A%E0%B8%B5%E0%B8%951&output=csv";
+    const CSV_URL_SHEET2 = "https://docs.google.com/spreadsheets/d/e/2PACX-1vScODA9rW6QK2xV9KnCz4PmLVGeIyBSSwvBj-qX1f325WOAygCgQnge_AUvTtwG_w/pub?sheet=Sheet2&output=csv";
     
-    // กำหนดลำดับการเรียงสินค้าหมวดใหญ่
     const ITEM_ORDER = [
       "เสื้อโปโลเทา",
       "เสื้อเชิ้ตชมพู",
@@ -98,23 +98,75 @@
       return 99;
     }
 
-    let rawData = [];
+    let rawDataSheet1 = [];
+    let orderMapSheet2 = new Map(); // เก็บแมตช์ระหว่าง (รหัส/ชื่อ) -> ลำดับที่ จาก Sheet2
 
     window.onload = function() {
-      Papa.parse(CSV_URL, {
+      // 1. โหลดข้อมูลจาก Sheet2 ก่อนเพื่อสร้างดัชนีเลขลำดับ
+      Papa.parse(CSV_URL_SHEET2, {
         download: true,
         header: true,
         skipEmptyLines: true,
-        complete: function(results) {
-          rawData = results.data;
-          document.getElementById('dataStatus').innerText = "🟢 พร้อมใช้งาน (โหลดข้อมูลเรียบร้อย)";
-          document.getElementById('dataStatus').classList.replace('text-gray-500', 'text-green-600');
-          document.getElementById('searchInput').disabled = false;
-          document.getElementById('searchBtn').disabled = false;
+        complete: function(res2) {
+          let currOrder = "";
+          let currStudentId = "";
+          let currName = "";
+
+          res2.data.forEach(row => {
+            // ดึงคอลัมน์ลำดับ
+            let rawOrder = "";
+            for (let k in row) {
+              if (k.trim().includes('ลำดับ')) {
+                rawOrder = String(row[k] || '').trim();
+                break;
+              }
+            }
+
+            const rawStudentId = String(row['รหัสนักศึกษา'] || '').trim();
+            const rawName = (row['ชื่อ - นามสกุล'] || row['ชื่อ-นามสกุล'] || '').trim();
+
+            if (rawOrder !== "") currOrder = rawOrder;
+            if (rawStudentId !== "") currStudentId = rawStudentId;
+            if (rawName !== "") currName = rawName;
+
+            if (currOrder !== "") {
+              if (currStudentId !== "") orderMapSheet2.set(`id_${currStudentId.toLowerCase()}`, currOrder);
+              if (currName !== "") orderMapSheet2.set(`name_${currName.toLowerCase()}`, currOrder);
+            }
+          });
+
+          // 2. โหลดข้อมูลหลักจาก ชีต1
+          Papa.parse(CSV_URL_SHEET1, {
+            download: true,
+            header: true,
+            skipEmptyLines: true,
+            complete: function(res1) {
+              rawDataSheet1 = res1.data;
+              document.getElementById('dataStatus').innerText = "🟢 พร้อมใช้งาน (โหลดข้อมูลเรียบร้อย)";
+              document.getElementById('dataStatus').classList.replace('text-gray-500', 'text-green-600');
+              document.getElementById('searchInput').disabled = false;
+              document.getElementById('searchBtn').disabled = false;
+            },
+            error: function(err) {
+              document.getElementById('dataStatus').innerText = "🔴 เกิดข้อผิดพลาดในการโหลดชีต 1";
+              document.getElementById('dataStatus').classList.replace('text-gray-500', 'text-red-600');
+            }
+          });
         },
         error: function(err) {
-          document.getElementById('dataStatus').innerText = "🔴 ไม่สามารถโหลดข้อมูลได้ กรุณารีเฟรชหน้าเว็บ";
-          document.getElementById('dataStatus').classList.replace('text-gray-500', 'text-red-600');
+          // หากดึง Sheet2 ไม่ได้ ให้ยังคงทำงานชีต 1 ต่อ
+          Papa.parse(CSV_URL_SHEET1, {
+            download: true,
+            header: true,
+            skipEmptyLines: true,
+            complete: function(res1) {
+              rawDataSheet1 = res1.data;
+              document.getElementById('dataStatus').innerText = "🟢 พร้อมใช้งาน";
+              document.getElementById('dataStatus').classList.replace('text-gray-500', 'text-green-600');
+              document.getElementById('searchInput').disabled = false;
+              document.getElementById('searchBtn').disabled = false;
+            }
+          });
         }
       });
     };
@@ -130,31 +182,20 @@
       let receiptsMap = new Map();
       let categoryMap = new Map();
 
-      let currentOrderNo = "";
       let currentDate = "";
       let currentStudentId = "";
       let currentName = "";
       let currentPhone = "";
       let currentReceipt = "";
 
-      rawData.forEach(row => {
-        // ดึงคอลัมน์ ลำดับ โดยมองหาคำว่า ลำดับ หรือ ลำดับที่
-        let rawOrderNo = "";
-        for (let key in row) {
-          if (key.trim().includes('ลำดับ')) {
-            rawOrderNo = String(row[key] || '').trim();
-            break;
-          }
-        }
-
+      rawDataSheet1.forEach(row => {
         const rawDate = (row['ว/ด/ป'] || row['วันที่'] || row['วัน/เดือน/ปี'] || '').trim();
         const rawReceipt = (row['เล่มที่/เลขที่ใบเสร็จ'] || row['เลขที่ใบเสร็จ'] || '').trim();
         const rawName = (row['ชื่อ - นามสกุล'] || row['ชื่อ-นามสกุล'] || '').trim();
         const rawStudentId = String(row['รหัสนักศึกษา'] || '').trim();
         const rawPhone = (row['เบอร์โทร'] || row['เบอร์โทรศัพท์'] || '').trim();
         
-        // Forward fill: ถ้าแถวนั้นมีเลขลำดับ/ชื่อใหม่ ให้สลับไปจำค่าใหม่ทันที
-        if (rawOrderNo !== "") currentOrderNo = rawOrderNo;
+        // Forward fill
         if (rawDate !== "") currentDate = rawDate;
         if (rawStudentId !== "") currentStudentId = rawStudentId;
         if (rawName !== "") currentName = rawName;
@@ -168,8 +209,13 @@
 
         if (currentStudentId.toLowerCase().includes(keyword) || currentName.toLowerCase().includes(keyword)) {
           if (!studentInfo && (currentStudentId || currentName)) {
+            // ค้นหาเลขลำดับจาก Sheet2
+            let matchedOrder = orderMapSheet2.get(`id_${currentStudentId.toLowerCase()}`) || 
+                               orderMapSheet2.get(`name_${currentName.toLowerCase()}`) || 
+                               "-";
+
             studentInfo = { 
-              orderNo: currentOrderNo,
+              orderNo: matchedOrder,
               name: currentName, 
               studentId: currentStudentId, 
               phone: currentPhone 
@@ -209,8 +255,8 @@
       document.getElementById('notFound').classList.add('hidden');
 
       if (studentInfo && receiptsMap.size > 0) {
-        // แสดงข้อมูลผู้สั่งซื้อ พร้อม "ลำดับที่" ที่ตรงกับใน Sheet จริง
-        document.getElementById('stOrderNo').innerText = `ลำดับที่ ${studentInfo.orderNo || '-'}`;
+        // แสดงข้อมูลผู้สั่งซื้อ พร้อม "ลำดับที่" ที่ดึงมาจาก Sheet2
+        document.getElementById('stOrderNo').innerText = `ลำดับที่ ${studentInfo.orderNo}`;
         document.getElementById('stName').innerText = studentInfo.name || '-';
         document.getElementById('stId').innerText = studentInfo.studentId || '-';
         document.getElementById('stPhone').innerText = studentInfo.phone || '-';
