@@ -17,7 +17,7 @@
   <div class="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden p-5 space-y-5">
     
     <div class="text-center space-y-1">
-      <h1 class="text-2xl font-bold text-blue-700">📦 ระบบเช็ครายการแจกของ (Sheet2)</h1>
+      <h1 class="text-2xl font-bold text-blue-700">📦 ระบบเช็ครายการแจกของ </h1>
       <p class="text-xs text-gray-500" id="dataStatus">🔄 กำลังโหลดข้อมูลจาก Google Sheets...</p>
     </div>
     
@@ -131,13 +131,16 @@
       let categoryMap = new Map();
 
       let currentOrderNo = "";
+      let currentDate = "";
       let currentStudentId = "";
       let currentName = "";
       let currentPhone = "";
       let currentReceipt = "";
 
       rawData.forEach(row => {
-        const rawOrderNo = (row['ลำดับ'] || row['ลำดับที่'] || '').trim();
+        // ค้นหาคอลัมน์ ลำดับ / วันที่ ด้วยการรองรับชื่อคอลัมน์หลายรูปแบบ
+        const rawOrderNo = (row['ลำดับ'] || row['ลำดับที่'] || row['No'] || row['no'] || row['NO'] || '').trim();
+        const rawDate = (row['ว/ด/ป'] || row['วันที่'] || row['วัน/เดือน/ปี'] || '').trim();
         const rawReceipt = (row['เล่มที่/เลขที่ใบเสร็จ'] || row['เลขที่ใบเสร็จ'] || '').trim();
         const rawName = (row['ชื่อ - นามสกุล'] || row['ชื่อ-นามสกุล'] || '').trim();
         const rawStudentId = String(row['รหัสนักศึกษา'] || '').trim();
@@ -145,6 +148,7 @@
         
         // Forward fill สำหรับแถวเว้นว่าง
         if (rawOrderNo !== "") currentOrderNo = rawOrderNo;
+        if (rawDate !== "") currentDate = rawDate;
         if (rawStudentId !== "") currentStudentId = rawStudentId;
         if (rawName !== "") currentName = rawName;
         if (rawPhone !== "") currentPhone = rawPhone;
@@ -166,11 +170,14 @@
           }
 
           if (qty > 0 && itemName !== "") {
-            // 1. แยกตามใบเสร็จ
+            // 1. แยกตามใบเสร็จ (เก็บบันทึกวันที่ไว้ด้วย)
             if (!receiptsMap.has(currentReceipt)) {
-              receiptsMap.set(currentReceipt, []);
+              receiptsMap.set(currentReceipt, {
+                date: currentDate,
+                items: []
+              });
             }
-            receiptsMap.get(currentReceipt).push({ itemName, size, note, qty });
+            receiptsMap.get(currentReceipt).items.push({ itemName, size, note, qty });
 
             // 2. จัดกลุ่มตามประเภทสินค้าใหญ่สำหรับสรุป
             if (!categoryMap.has(itemName)) {
@@ -196,7 +203,8 @@
 
       if (studentInfo && receiptsMap.size > 0) {
         // แสดงข้อมูลผู้สั่งซื้อ พร้อม "ลำดับที่"
-        document.getElementById('stOrderNo').innerText = `ลำดับที่ ${studentInfo.orderNo || '-'}`;
+        const displayOrder = studentInfo.orderNo ? `ลำดับที่ ${studentInfo.orderNo}` : 'ลำดับที่พบในระบบ';
+        document.getElementById('stOrderNo').innerText = displayOrder;
         document.getElementById('stName').innerText = studentInfo.name || '-';
         document.getElementById('stId').innerText = studentInfo.studentId || '-';
         document.getElementById('stPhone').innerText = studentInfo.phone || '-';
@@ -204,16 +212,16 @@
         document.getElementById('studentCard').classList.remove('hidden');
 
         // ----------------------------------------------------
-        // 1. สร้างการ์ดแสดงตามใบเสร็จแต่ละใบ
+        // 1. สร้างการ์ดแสดงตามใบเสร็จแต่ละใบ (พร้อมวันที่)
         // ----------------------------------------------------
         const receiptList = document.getElementById('receiptList');
         receiptList.innerHTML = '';
 
-        receiptsMap.forEach((itemsInRc, rcNumber) => {
+        receiptsMap.forEach((rcData, rcNumber) => {
           const rcCard = document.createElement('div');
           rcCard.className = "bg-purple-50 p-3.5 rounded-lg border border-purple-200 space-y-2";
           
-          let itemsHtml = itemsInRc.map(it => {
+          let itemsHtml = rcData.items.map(it => {
             const noteTag = it.note ? `<span class="ml-1 px-1.5 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-bold rounded border border-yellow-300">${it.note}</span>` : '';
             return `
               <div class="flex justify-between items-center text-sm py-1 border-b border-purple-100 last:border-0">
@@ -227,10 +235,14 @@
             `;
           }).join('');
 
+          const dateDisplay = rcData.date ? `<span class="text-xs font-normal text-purple-700 ml-1">(วันที่: ${rcData.date})</span>` : '';
+
           rcCard.innerHTML = `
             <div class="flex justify-between items-center border-b border-purple-200 pb-1.5">
-              <span class="font-bold text-purple-900 text-sm">🧾 ใบเสร็จเลขที่: ${rcNumber || 'ไม่ระบุ'}</span>
-              <span class="text-xs bg-purple-200 text-purple-800 px-2 py-0.5 rounded-full font-semibold">${itemsInRc.length} รายการ</span>
+              <span class="font-bold text-purple-900 text-sm">
+                🧾 ใบเสร็จเลขที่: ${rcNumber || 'ไม่ระบุ'} ${dateDisplay}
+              </span>
+              <span class="text-xs bg-purple-200 text-purple-800 px-2 py-0.5 rounded-full font-semibold">${rcData.items.length} รายการ</span>
             </div>
             <div class="pt-1">${itemsHtml}</div>
           `;
