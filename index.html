@@ -17,7 +17,7 @@
   <div class="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden p-5 space-y-5">
     
     <div class="text-center space-y-1">
-      <h1 class="text-2xl font-bold text-blue-700">📦 ระบบเช็ครายการแจกของ</h1>
+      <h1 class="text-2xl font-bold text-blue-700">📦 ระบบเช็ครายการแจกของ (Sheet2)</h1>
       <p class="text-xs text-gray-500" id="dataStatus">🔄 กำลังโหลดข้อมูลจาก Google Sheets...</p>
     </div>
     
@@ -36,7 +36,10 @@
 
     <!-- ข้อมูลผู้สั่งซื้อ -->
     <div id="studentCard" class="hidden bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-1">
-      <h2 class="font-semibold text-blue-800 text-base border-b border-blue-200 pb-1 mb-2">👤 ข้อมูลผู้สั่งซื้อ</h2>
+      <div class="flex justify-between items-center border-b border-blue-200 pb-1.5 mb-2">
+        <h2 class="font-semibold text-blue-800 text-base">👤 ข้อมูลผู้สั่งซื้อ</h2>
+        <span class="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-full" id="stOrderNo">ลำดับที่ -</span>
+      </div>
       <p class="text-sm"><strong>ชื่อ-นามสกุล:</strong> <span id="stName">-</span></p>
       <p class="text-sm"><strong>รหัสนักศึกษา:</strong> <span id="stId" class="font-mono text-blue-700 font-bold">-</span></p>
       <p class="text-sm"><strong>เบอร์โทร:</strong> <span id="stPhone">-</span></p>
@@ -71,7 +74,8 @@
   </div>
 
   <script>
-    const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vScODA9rW6QK2xV9KnCz4PmLVGeIyBSSwvBj-qX1f325WOAygCgQnge_AUvTtwG_w/pub?output=csv";
+    // ดึงข้อมูล Published CSV เฉพาะ Sheet2
+    const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vScODA9rW6QK2xV9KnCz4PmLVGeIyBSSwvBj-qX1f325WOAygCgQnge_AUvTtwG_w/pub?sheet=Sheet2&output=csv";
     
     // กำหนดลำดับการเรียงสินค้าหมวดใหญ่
     const ITEM_ORDER = [
@@ -123,33 +127,38 @@
       }
 
       let studentInfo = null;
-      let receiptsMap = new Map(); // เก็บรายการแยกตามใบเสร็จ
-      let categoryMap = new Map(); // เก็บรายการรวมจัดกลุ่มตามหมวดสินค้า
+      let receiptsMap = new Map();
+      let categoryMap = new Map();
 
+      let currentOrderNo = "";
       let currentStudentId = "";
       let currentName = "";
       let currentPhone = "";
       let currentReceipt = "";
 
       rawData.forEach(row => {
+        const rawOrderNo = (row['ลำดับ'] || row['ลำดับที่'] || '').trim();
         const rawReceipt = (row['เล่มที่/เลขที่ใบเสร็จ'] || row['เลขที่ใบเสร็จ'] || '').trim();
         const rawName = (row['ชื่อ - นามสกุล'] || row['ชื่อ-นามสกุล'] || '').trim();
         const rawStudentId = String(row['รหัสนักศึกษา'] || '').trim();
         const rawPhone = (row['เบอร์โทร'] || row['เบอร์โทรศัพท์'] || '').trim();
         
+        // Forward fill สำหรับแถวเว้นว่าง
+        if (rawOrderNo !== "") currentOrderNo = rawOrderNo;
         if (rawStudentId !== "") currentStudentId = rawStudentId;
         if (rawName !== "") currentName = rawName;
         if (rawPhone !== "") currentPhone = rawPhone;
         if (rawReceipt !== "") currentReceipt = rawReceipt;
 
         const itemName = (row['รายการ'] || '').trim();
-        const note = (row['หมายเหตุ'] || '').trim(); // อ่านค่าจากคอลัมน์หมายเหตุ (เช่น รหัส 69)
+        const note = (row['หมายเหตุ'] || '').trim();
         const size = (row['ไซส์'] || '-').trim();
         const qty = parseInt(row['จำนวน'] || '0', 10);
 
         if (currentStudentId.toLowerCase().includes(keyword) || currentName.toLowerCase().includes(keyword)) {
           if (!studentInfo && (currentStudentId || currentName)) {
             studentInfo = { 
+              orderNo: currentOrderNo,
               name: currentName, 
               studentId: currentStudentId, 
               phone: currentPhone 
@@ -169,7 +178,6 @@
             }
             let sizeMap = categoryMap.get(itemName);
             
-            // รวม คีย์จาก Size + Note เพื่อแยกรหัสปี (เช่น M_รหัส 69)
             const subKey = `${size}___${note}`;
             if (sizeMap.has(subKey)) {
               sizeMap.set(subKey, sizeMap.get(subKey) + qty);
@@ -187,7 +195,8 @@
       document.getElementById('notFound').classList.add('hidden');
 
       if (studentInfo && receiptsMap.size > 0) {
-        // แสดงข้อมูลผู้สั่งซื้อ
+        // แสดงข้อมูลผู้สั่งซื้อ พร้อม "ลำดับที่"
+        document.getElementById('stOrderNo').innerText = `ลำดับที่ ${studentInfo.orderNo || '-'}`;
         document.getElementById('stName').innerText = studentInfo.name || '-';
         document.getElementById('stId').innerText = studentInfo.studentId || '-';
         document.getElementById('stPhone').innerText = studentInfo.phone || '-';
