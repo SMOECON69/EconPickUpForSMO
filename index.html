@@ -17,7 +17,7 @@
   <div class="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden p-5 space-y-5">
     
     <div class="text-center space-y-1">
-      <h1 class="text-2xl font-bold text-blue-700">📦 ระบบเช็ครายการแจกของ </h1>
+      <h1 class="text-2xl font-bold text-blue-700">📦 ระบบเช็ครายการแจกของ</h1>
       <p class="text-xs text-gray-500" id="dataStatus">🔄 กำลังโหลดข้อมูลจาก Google Sheets...</p>
     </div>
     
@@ -137,9 +137,22 @@
       let currentPhone = "";
       let currentReceipt = "";
 
-      rawData.forEach(row => {
-        // ค้นหาคอลัมน์ ลำดับ / วันที่ ด้วยการรองรับชื่อคอลัมน์หลายรูปแบบ
-        const rawOrderNo = (row['ลำดับ'] || row['ลำดับที่'] || row['No'] || row['no'] || row['NO'] || '').trim();
+      rawData.forEach((row, index) => {
+        // ค้นหาคอลัมน์ ลำดับ อัตโนมัติจากทุกชื่อที่เป็นไปได้
+        let rawOrderNo = "";
+        for (let key in row) {
+          const cleanKey = key.trim().toLowerCase();
+          if (cleanKey === 'ลำดับ' || cleanKey === 'ลำดับที่' || cleanKey === 'no' || cleanKey === 'no.' || cleanKey === 'ที่') {
+            rawOrderNo = String(row[key] || '').trim();
+            break;
+          }
+        }
+        
+        // ถ้าไม่มีคอลัมน์ลำดับ ให้ใช้ดัชนีแถว + 1
+        if (rawOrderNo === "" && currentOrderNo === "") {
+          rawOrderNo = String(index + 1);
+        }
+
         const rawDate = (row['ว/ด/ป'] || row['วันที่'] || row['วัน/เดือน/ปี'] || '').trim();
         const rawReceipt = (row['เล่มที่/เลขที่ใบเสร็จ'] || row['เลขที่ใบเสร็จ'] || '').trim();
         const rawName = (row['ชื่อ - นามสกุล'] || row['ชื่อ-นามสกุล'] || '').trim();
@@ -170,7 +183,7 @@
           }
 
           if (qty > 0 && itemName !== "") {
-            // 1. แยกตามใบเสร็จ (เก็บบันทึกวันที่ไว้ด้วย)
+            // 1. แยกตามใบเสร็จ
             if (!receiptsMap.has(currentReceipt)) {
               receiptsMap.set(currentReceipt, {
                 date: currentDate,
@@ -203,8 +216,7 @@
 
       if (studentInfo && receiptsMap.size > 0) {
         // แสดงข้อมูลผู้สั่งซื้อ พร้อม "ลำดับที่"
-        const displayOrder = studentInfo.orderNo ? `ลำดับที่ ${studentInfo.orderNo}` : 'ลำดับที่พบในระบบ';
-        document.getElementById('stOrderNo').innerText = displayOrder;
+        document.getElementById('stOrderNo').innerText = `ลำดับที่ ${studentInfo.orderNo}`;
         document.getElementById('stName').innerText = studentInfo.name || '-';
         document.getElementById('stId').innerText = studentInfo.studentId || '-';
         document.getElementById('stPhone').innerText = studentInfo.phone || '-';
