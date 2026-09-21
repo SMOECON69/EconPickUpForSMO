@@ -25,7 +25,7 @@
     <div class="space-y-2">
       <label class="block text-sm font-medium text-gray-700">กรอกรหัสนักศึกษา หรือ ชื่อ-นามสกุล:</label>
       <div class="flex gap-2">
-        <input type="text" id="searchInput" placeholder="เช่น 671610105 หรือ ป้าหน่อย" disabled
+        <input type="text" id="searchInput" placeholder="เช่น 671610105 หรือ ชื่นกมล" disabled
                class="flex-1 border rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100">
         <button onclick="handleSearch()" id="searchBtn" disabled
                 class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 active:scale-95 transition disabled:bg-gray-400">
@@ -74,7 +74,6 @@
   </div>
 
   <script>
-    // ดึงข้อมูลชีต1 โดยตรง
     const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vScODA9rW6QK2xV9KnCz4PmLVGeIyBSSwvBj-qX1f325WOAygCgQnge_AUvTtwG_w/pub?output=csv";
     
     const ITEM_ORDER = [
@@ -99,13 +98,15 @@
 
     let sheetData = [];
 
-    // ฟังก์ชันช่วยหาค่าจาก object โดยรองรับชื่อคอลัมน์หลากรูปแบบและแก้ปัญหาอักขระ BOM
-    function getVal(row, possibleKeys) {
-      for (let k in row) {
-        const cleanK = k.replace(/^\uFEFF/, '').trim();
-        for (let target of possibleKeys) {
-          if (cleanK.toLowerCase() === target.toLowerCase()) {
-            return String(row[k] || '').trim();
+    // ฟังก์ชันช่วยหาค่าจากคอลัมน์อย่างยืดหยุ่น (แก้ปัญหาการเว้นวรรค/BOM)
+    function getVal(row, targets) {
+      for (let key in row) {
+        // ลบอักขระพิเศษ และเว้นวรรคออกทั้งหมดเพื่อเปรียบเทียบ
+        const cleanKey = key.replace(/[^\u0E00-\u0E7Fa-zA-Z0-9]/g, '').toLowerCase();
+        for (let t of targets) {
+          const cleanTarget = t.replace(/[^\u0E00-\u0E7Fa-zA-Z0-9]/g, '').toLowerCase();
+          if (cleanKey.includes(cleanTarget) || cleanTarget.includes(cleanKey)) {
+            return String(row[key] || '').trim();
           }
         }
       }
@@ -150,12 +151,12 @@
       let currentPhone = "";
 
       sheetData.forEach(row => {
-        const rawOrderNo = getVal(row, ['ลำดับ', 'ลำดับที่', 'no', 'no.']);
-        const rawDate = getVal(row, ['ว/ด/ป', 'วันที่', 'วัน/เดือน/ปี']);
-        const rawReceipt = getVal(row, ['เล่มที่/เลขที่ใบเสร็จ', 'เลขที่ใบเสร็จ', 'ใบเสร็จ']);
-        const rawName = getVal(row, ['ชื่อ - นามสกุล', 'ชื่อ-นามสกุล', 'ชื่อ']);
-        const rawStudentId = getVal(row, ['รหัสนักศึกษา']);
-        const rawPhone = getVal(row, ['เบอร์โทร', 'เบอร์โทรศัพท์']);
+        const rawOrderNo = getVal(row, ['ลำดับ']);
+        const rawDate = getVal(row, ['ว/ด/ป', 'วันที่']);
+        const rawReceipt = getVal(row, ['ใบเสร็จ', 'เล่มที่']);
+        const rawName = getVal(row, ['ชื่อ']);
+        const rawStudentId = getVal(row, ['รหัส']);
+        const rawPhone = getVal(row, ['เบอร์', 'โทร']);
 
         // Forward fill สำหรับช่องเว้นว่าง
         if (rawOrderNo !== "") currentOrderNo = rawOrderNo;
