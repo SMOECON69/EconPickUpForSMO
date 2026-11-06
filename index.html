@@ -16,7 +16,7 @@
         <!-- Header -->
         <div class="text-center mb-6">
             <div class="text-4xl mb-2">📦</div>
-            <h1 class="text-2xl md:text-3xl font-bold text-blue-600">ระบบเช็ครายการแจกของ</h1>
+            <h1 class="text-2xl md:text-3xl font-bold text-blue-600">ระบบเช็ครายการแจ้งของ</h1>
             <div class="inline-flex items-center gap-2 mt-2 text-sm text-green-600 bg-green-50 px-3 py-1 rounded-full">
                 <span class="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse"></span>
                 พร้อมใช้งาน (โหลดข้อมูลเรียบร้อย)
@@ -27,7 +27,7 @@
         <div class="space-y-4">
             <label class="block text-gray-700 font-medium">กรอกรหัสนักศึกษา หรือ ชื่อ-นามสกุล:</label>
             <div class="flex flex-col sm:flex-row gap-2">
-                <input type="text" id="searchInput" placeholder="เช่น 671610105 หรือ ชื่นกมล" 
+                <input type="text" id="searchInput" placeholder="เช่น 671610105 หรือ ชื่อ-นามสกุล" 
                     class="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-700">
                 <button onclick="handleSearch()" 
                     class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-3 rounded-xl transition duration-200 shadow-md">
@@ -41,7 +41,7 @@
     </div>
 
     <script>
-        // ใส่ URL ที่ได้จากการ Deploy Google Apps Script ที่นี่
+        // แทนที่ด้วย URL ของ Google Apps Script Web App ของคุณ
         const SCRIPT_URL = "YOUR_WEB_APP_URL_HERE";
 
         function handleSearch() {
@@ -55,7 +55,6 @@
 
             container.innerHTML = `<div class="text-center py-4 text-gray-500">กำลังค้นหาข้อมูล...</div>`;
 
-            // เรียกใช้งาน Apps Script ผ่าน Fetch API (POST หรือ GET)
             fetch(`${SCRIPT_URL}?action=search&keyword=${encodeURIComponent(keyword)}`)
                 .then(res => res.json())
                 .then(response => {
@@ -74,16 +73,13 @@
                                     <div class="grid grid-cols-2 gap-2 text-sm text-gray-600 bg-white p-3 rounded-lg border">
                             `;
                             
-                            // วแสดงข้อมูลคอลัมน์ทั้งหมดในแถวนั้น
                             for (let key in item) {
                                 if (key !== 'isReceived') {
                                     html += `<div><span class="font-medium text-gray-700">${key}:</span> ${item[key]}</div>`;
                                 }
                             }
 
-                            html += `
-                                    </div>
-                            `;
+                            html += `</div>`;
 
                             if (!isReceived) {
                                 html += `
@@ -116,7 +112,7 @@
         function claimItem(itemData) {
             if (!confirm("ยืนยันการกดรับผ้าคาดรายการนี้?")) return;
 
-            const primaryId = Object.values(itemData)[0]; // ดึงค่าคอลัมน์แรกเป็น ID อ้างอิง
+            const primaryId = Object.values(itemData)[0];
 
             fetch(SCRIPT_URL, {
                 method: 'POST',
@@ -126,16 +122,4 @@
             .then(response => {
                 if (response.success) {
                     alert("บันทึกการรับของสำเร็จ!");
-                    handleSearch(); // รีเฟรชผลการค้นหาเพื่อให้ปุ่มเปลี่ยนสถานะ
-                } else {
-                    alert("เกิดข้อผิดพลาด: " + response.message);
-                }
-            })
-            .catch(err => {
-                console.error(err);
-                alert("ไม่สามารถบันทึกข้อมูลได้");
-            });
-        }
-    </script>
-</body>
-</html>
+                    handleSearch();
