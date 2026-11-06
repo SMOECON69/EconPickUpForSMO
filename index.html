@@ -1,337 +1,141 @@
 <!DOCTYPE html>
 <html lang="th">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ระบบเช็ครายการแจกของพรีออเดอร์</title>
-  <!-- Tailwind CSS -->
-  <script src="https://cdn.tailwindcss.com"></script>
-  <!-- PapaParse สำหรับอ่านไฟล์ CSV -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-  <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;600;700&display=swap" rel="stylesheet">
-  <style>
-    body { font-family: 'Prompt', sans-serif; }
-  </style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบเช็ครายการแจกของ (ผ้าคาด)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Prompt', sans-serif; background-color: #f3f4f6; }
+    </style>
 </head>
-<body class="bg-gray-100 min-h-screen p-3 md:p-6">
-  <div class="max-w-md mx-auto bg-white rounded-xl shadow-md overflow-hidden p-5 space-y-5">
-    
-    <div class="text-center space-y-1">
-      <h1 class="text-2xl font-bold text-blue-700">📦 ระบบเช็ครายการแจกของ</h1>
-      <p class="text-xs text-gray-500" id="dataStatus">🔄 กำลังโหลดข้อมูลจาก Google Sheets...</p>
-    </div>
-    
-    <!-- ช่องค้นหา -->
-    <div class="space-y-2">
-      <label class="block text-sm font-medium text-gray-700">กรอกรหัสนักศึกษา หรือ ชื่อ-นามสกุล:</label>
-      <div class="flex gap-2">
-        <input type="text" id="searchInput" placeholder="เช่น 671610105 หรือ ชื่นกมล" disabled
-               class="flex-1 border rounded-lg px-3 py-2 text-base focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100">
-        <button onclick="handleSearch()" id="searchBtn" disabled
-                class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 active:scale-95 transition disabled:bg-gray-400">
-          ค้นหา
-        </button>
-      </div>
-    </div>
+<body class="min-h-screen flex items-center justify-center p-4">
 
-    <!-- ข้อมูลผู้สั่งซื้อ -->
-    <div id="studentCard" class="hidden bg-blue-50 p-4 rounded-lg border border-blue-200 space-y-1">
-      <div class="flex justify-between items-center border-b border-blue-200 pb-1.5 mb-2">
-        <h2 class="font-semibold text-blue-800 text-base">👤 ข้อมูลผู้สั่งซื้อ</h2>
-        <span class="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-full" id="stOrderNo">ลำดับที่ -</span>
-      </div>
-      <p class="text-sm"><strong>ชื่อ-นามสกุล:</strong> <span id="stName">-</span></p>
-      <p class="text-sm"><strong>รหัสนักศึกษา:</strong> <span id="stId" class="font-mono text-blue-700 font-bold">-</span></p>
-      <p class="text-sm"><strong>เบอร์โทร:</strong> <span id="stPhone">-</span></p>
-      <p class="text-sm"><strong>จำนวนใบเสร็จทั้งหมด:</strong> <span id="stReceiptCount" class="font-bold text-blue-800">-</span></p>
-    </div>
-
-    <!-- ส่วนที่ 1: รายการแยกตามใบเสร็จทุกใบ -->
-    <div id="receiptsContainer" class="hidden space-y-3">
-      <h2 class="font-semibold text-purple-800 text-lg flex items-center gap-1">
-        📄 รายละเอียดใบเสร็จทั้งหมด
-      </h2>
-      <div id="receiptList" class="space-y-3"></div>
-    </div>
-
-    <!-- ส่วนที่ 2: สรุปรายการรวมสำหรับคนเดินหยิบของ -->
-    <div id="itemsContainer" class="hidden space-y-3 pt-2 border-t border-gray-200">
-      <div class="flex justify-between items-center">
-        <h2 class="font-bold text-gray-800 text-lg flex items-center gap-1">
-          🛒 รายการสรุปสำหรับเดินหยิบ
-        </h2>
-        <span class="bg-blue-100 text-blue-800 text-xs font-bold px-2.5 py-1 rounded-full" id="itemCount">0 ชิ้น</span>
-      </div>
-      <p class="text-xs text-gray-500">จัดกลุ่มตามประเภทสินค้า เพื่อให้เดินไปรับที่เคาน์เตอร์ได้สะดวก</p>
-      <div id="itemList" class="space-y-3"></div>
-    </div>
-
-    <!-- ไม่พบข้อมูล -->
-    <div id="notFound" class="hidden text-center text-red-500 py-6 font-medium bg-red-50 rounded-lg border border-red-200">
-      ❌ ไม่พบข้อมูลการสั่งซื้อ
-    </div>
-
-  </div>
-
-  <script>
-    const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vScODA9rW6QK2xV9KnCz4PmLVGeIyBSSwvBj-qX1f325WOAygCgQnge_AUvTtwG_w/pub?output=csv";
-    
-    const ITEM_ORDER = [
-      "เสื้อโปโลเทา",
-      "เสื้อเชิ้ตชมพู",
-      "เสื้อกิจกรรม 2026",
-      "กางเกงวอร์ม",
-      "กางเกงวอร์มพิเศษ",
-      "ตุ้งติ้ง",
-      "หัวเข็มขัด"
-    ];
-
-    function getItemRank(itemName) {
-      const cleanName = itemName.trim();
-      for (let i = 0; i < ITEM_ORDER.length; i++) {
-        if (cleanName.includes(ITEM_ORDER[i])) {
-          return i;
-        }
-      }
-      return 99;
-    }
-
-    let sheetData = [];
-
-    // ฟังก์ชันช่วยหาค่าจากคอลัมน์อย่างยืดหยุ่น (แก้ปัญหาการเว้นวรรค/BOM)
-    function getVal(row, targets) {
-      for (let key in row) {
-        // ลบอักขระพิเศษ และเว้นวรรคออกทั้งหมดเพื่อเปรียบเทียบ
-        const cleanKey = key.replace(/[^\u0E00-\u0E7Fa-zA-Z0-9]/g, '').toLowerCase();
-        for (let t of targets) {
-          const cleanTarget = t.replace(/[^\u0E00-\u0E7Fa-zA-Z0-9]/g, '').toLowerCase();
-          if (cleanKey.includes(cleanTarget) || cleanTarget.includes(cleanKey)) {
-            return String(row[key] || '').trim();
-          }
-        }
-      }
-      return '';
-    }
-
-    window.onload = function() {
-      Papa.parse(CSV_URL, {
-        download: true,
-        header: true,
-        skipEmptyLines: true,
-        complete: function(res) {
-          sheetData = res.data;
-          document.getElementById('dataStatus').innerText = "🟢 พร้อมใช้งาน (โหลดข้อมูลเรียบร้อย)";
-          document.getElementById('dataStatus').classList.replace('text-gray-500', 'text-green-600');
-          document.getElementById('searchInput').disabled = false;
-          document.getElementById('searchBtn').disabled = false;
-        },
-        error: function(err) {
-          document.getElementById('dataStatus').innerText = "🔴 ไม่สามารถโหลดข้อมูลได้ กรุณารีเฟรชหน้าเว็บ";
-          document.getElementById('dataStatus').classList.replace('text-gray-500', 'text-red-600');
-        }
-      });
-    };
-
-    function handleSearch() {
-      const keyword = document.getElementById('searchInput').value.trim().toLowerCase();
-      if (!keyword) {
-        alert('กรุณากรอกรหัสนักศึกษาหรือชื่อ');
-        return;
-      }
-
-      let studentInfo = null;
-      let receiptsMap = new Map();
-      let categoryMap = new Map();
-
-      let currentOrderNo = "";
-      let currentDate = "";
-      let currentReceipt = "";
-      let currentName = "";
-      let currentStudentId = "";
-      let currentPhone = "";
-
-      sheetData.forEach(row => {
-        const rawOrderNo = getVal(row, ['ลำดับ']);
-        const rawDate = getVal(row, ['ว/ด/ป', 'วันที่']);
-        const rawReceipt = getVal(row, ['ใบเสร็จ', 'เล่มที่']);
-        const rawName = getVal(row, ['ชื่อ']);
-        const rawStudentId = getVal(row, ['รหัส']);
-        const rawPhone = getVal(row, ['เบอร์', 'โทร']);
-
-        // Forward fill สำหรับช่องเว้นว่าง
-        if (rawOrderNo !== "") currentOrderNo = rawOrderNo;
-        if (rawDate !== "") currentDate = rawDate;
-        if (rawReceipt !== "") currentReceipt = rawReceipt;
-        if (rawName !== "") currentName = rawName;
-        if (rawStudentId !== "") currentStudentId = rawStudentId;
-        if (rawPhone !== "") currentPhone = rawPhone;
-
-        const itemName = getVal(row, ['รายการ']);
-        const note = getVal(row, ['หมายเหตุ']);
-        const size = getVal(row, ['ไซส์']) || '-';
-        const qtyStr = getVal(row, ['จำนวน']);
-        const qty = parseInt(qtyStr || '0', 10);
-
-        if (currentStudentId.toLowerCase().includes(keyword) || currentName.toLowerCase().includes(keyword)) {
-          if (!studentInfo && (currentStudentId || currentName)) {
-            studentInfo = { 
-              orderNo: currentOrderNo || "-",
-              name: currentName, 
-              studentId: currentStudentId, 
-              phone: currentPhone 
-            };
-          }
-
-          if (qty > 0 && itemName !== "") {
-            // 1. แยกตามใบเสร็จ
-            if (!receiptsMap.has(currentReceipt)) {
-              receiptsMap.set(currentReceipt, {
-                date: currentDate,
-                items: []
-              });
-            }
-            receiptsMap.get(currentReceipt).items.push({ itemName, size, note, qty });
-
-            // 2. จัดกลุ่มตามประเภทสินค้าใหญ่สำหรับสรุป
-            if (!categoryMap.has(itemName)) {
-              categoryMap.set(itemName, new Map());
-            }
-            let sizeMap = categoryMap.get(itemName);
-            
-            const subKey = `${size}___${note}`;
-            if (sizeMap.has(subKey)) {
-              sizeMap.set(subKey, sizeMap.get(subKey) + qty);
-            } else {
-              sizeMap.set(subKey, qty);
-            }
-          }
-        }
-      });
-
-      // ซ่อน/แสดง UI
-      document.getElementById('studentCard').classList.add('hidden');
-      document.getElementById('receiptsContainer').classList.add('hidden');
-      document.getElementById('itemsContainer').classList.add('hidden');
-      document.getElementById('notFound').classList.add('hidden');
-
-      if (studentInfo && receiptsMap.size > 0) {
-        // แสดงข้อมูลผู้สั่งซื้อ
-        document.getElementById('stOrderNo').innerText = `ลำดับที่ ${studentInfo.orderNo}`;
-        document.getElementById('stName').innerText = studentInfo.name || '-';
-        document.getElementById('stId').innerText = studentInfo.studentId || '-';
-        document.getElementById('stPhone').innerText = studentInfo.phone || '-';
-        document.getElementById('stReceiptCount').innerText = `${receiptsMap.size} ใบเสร็จ`;
-        document.getElementById('studentCard').classList.remove('hidden');
-
-        // ----------------------------------------------------
-        // 1. สร้างการ์ดแสดงตามใบเสร็จแต่ละใบ
-        // ----------------------------------------------------
-        const receiptList = document.getElementById('receiptList');
-        receiptList.innerHTML = '';
-
-        receiptsMap.forEach((rcData, rcNumber) => {
-          const rcCard = document.createElement('div');
-          rcCard.className = "bg-purple-50 p-3.5 rounded-lg border border-purple-200 space-y-2";
-          
-          let itemsHtml = rcData.items.map(it => {
-            const noteTag = it.note ? `<span class="ml-1 px-1.5 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-bold rounded border border-yellow-300">${it.note}</span>` : '';
-            return `
-              <div class="flex justify-between items-center text-sm py-1 border-b border-purple-100 last:border-0">
-                <span class="text-gray-800 font-medium">
-                  ${it.itemName} 
-                  <span class="text-xs text-gray-500 bg-white px-1.5 py-0.5 rounded border border-purple-200">ไซส์: ${it.size}</span>
-                  ${noteTag}
-                </span>
-                <span class="font-bold text-purple-700">x ${it.qty}</span>
-              </div>
-            `;
-          }).join('');
-
-          const dateDisplay = rcData.date ? `<span class="text-xs font-normal text-purple-700 ml-1">(วันที่: ${rcData.date})</span>` : '';
-
-          rcCard.innerHTML = `
-            <div class="flex justify-between items-center border-b border-purple-200 pb-1.5">
-              <span class="font-bold text-purple-900 text-sm">
-                🧾 ใบเสร็จเลขที่: ${rcNumber || 'ไม่ระบุ'} ${dateDisplay}
-              </span>
-              <span class="text-xs bg-purple-200 text-purple-800 px-2 py-0.5 rounded-full font-semibold">${rcData.items.length} รายการ</span>
+    <div class="bg-white w-full max-w-xl rounded-2xl shadow-xl p-6 md:p-8">
+        <!-- Header -->
+        <div class="text-center mb-6">
+            <div class="text-4xl mb-2">📦</div>
+            <h1 class="text-2xl md:text-3xl font-bold text-blue-600">ระบบเช็ครายการแจกของ</h1>
+            <div class="inline-flex items-center gap-2 mt-2 text-sm text-green-600 bg-green-50 px-3 py-1 rounded-full">
+                <span class="w-2.5 h-2.5 bg-green-500 rounded-full animate-pulse"></span>
+                พร้อมใช้งาน (โหลดข้อมูลเรียบร้อย)
             </div>
-            <div class="pt-1">${itemsHtml}</div>
-          `;
-          receiptList.appendChild(rcCard);
-        });
-        document.getElementById('receiptsContainer').classList.remove('hidden');
+        </div>
 
-        // ----------------------------------------------------
-        // 2. สร้างกรอบหมวดหมู่สินค้าใหญ่สำหรับหยิบของ
-        // ----------------------------------------------------
-        const itemList = document.getElementById('itemList');
-        itemList.innerHTML = '';
-
-        let sortedCategories = Array.from(categoryMap.keys()).sort((a, b) => {
-          const rankA = getItemRank(a);
-          const rankB = getItemRank(b);
-          if (rankA !== rankB) return rankA - rankB;
-          return a.localeCompare(b, 'th');
-        });
-
-        let totalOverallQty = 0;
-
-        sortedCategories.forEach(catName => {
-          const sizeMap = categoryMap.get(catName);
-          let catTotalQty = 0;
-          let sizesHtml = '';
-
-          sizeMap.forEach((qty, subKey) => {
-            catTotalQty += qty;
-            totalOverallQty += qty;
-            
-            const [size, note] = subKey.split('___');
-            const noteBadge = note ? `<span class="ml-2 px-2 py-0.5 bg-yellow-100 text-yellow-800 text-xs font-bold rounded border border-yellow-300">📌 ${note}</span>` : '';
-
-            sizesHtml += `
-              <div class="flex items-center justify-between bg-gray-50 p-2.5 rounded-md border border-gray-200">
-                <div class="flex items-center">
-                  <span class="text-sm font-semibold text-gray-700">ไซส์: <span class="text-base font-bold text-blue-700 bg-white px-2 py-0.5 rounded border border-gray-300">${size}</span></span>
-                  ${noteBadge}
-                </div>
-                <span class="text-lg font-extrabold text-green-600 bg-green-50 px-3 py-0.5 rounded border border-green-200">x ${qty}</span>
-              </div>
-            `;
-          });
-
-          const groupCard = document.createElement('div');
-          groupCard.className = "bg-white p-4 rounded-xl border-2 border-blue-500 shadow-sm space-y-2.5";
-          groupCard.innerHTML = `
-            <div class="flex justify-between items-center border-b-2 border-blue-100 pb-2">
-              <h3 class="font-bold text-blue-900 text-base flex items-center gap-1.5">
-                🏷️ ${catName}
-              </h3>
-              <span class="bg-blue-600 text-white text-xs font-bold px-2.5 py-1 rounded-md">
-                รวม ${catTotalQty} ชิ้น
-              </span>
+        <!-- Search Box -->
+        <div class="space-y-4">
+            <label class="block text-gray-700 font-medium">กรอกรหัสนักศึกษา หรือ ชื่อ-นามสกุล:</label>
+            <div class="flex flex-col sm:flex-row gap-2">
+                <input type="text" id="searchInput" placeholder="เช่น 671610105 หรือ ชื่นกมล" 
+                    class="flex-1 px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-blue-500 focus:outline-none text-gray-700">
+                <button onclick="handleSearch()" 
+                    class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-6 py-3 rounded-xl transition duration-200 shadow-md">
+                    ค้นหา
+                </button>
             </div>
-            <div class="grid grid-cols-1 gap-2 pt-1">
-              ${sizesHtml}
-            </div>
-          `;
-          itemList.appendChild(groupCard);
-        });
+        </div>
 
-        document.getElementById('itemCount').innerText = `รวมทั้งหมด ${totalOverallQty} ชิ้น`;
-        document.getElementById('itemsContainer').classList.remove('hidden');
+        <!-- Result Section -->
+        <div id="resultContainer" class="mt-6 space-y-4"></div>
+    </div>
 
-      } else {
-        document.getElementById('notFound').classList.remove('hidden');
-      }
-    }
+    <script>
+        // ใส่ URL ที่ได้จากการ Deploy Google Apps Script ที่นี่
+        const SCRIPT_URL = "YOUR_WEB_APP_URL_HERE";
 
-    // กด Enter ในช่องค้นหาได้
-    document.getElementById('searchInput').addEventListener('keypress', function (e) {
-      if (e.key === 'Enter') {
-        handleSearch();
-      }
-    });
-  </script>
+        function handleSearch() {
+            const keyword = document.getElementById('searchInput').value.trim();
+            const container = document.getElementById('resultContainer');
+
+            if (!keyword) {
+                alert('กรุณากรอกข้อมูลสำหรับค้นหา');
+                return;
+            }
+
+            container.innerHTML = `<div class="text-center py-4 text-gray-500">กำลังค้นหาข้อมูล...</div>`;
+
+            // เรียกใช้งาน Apps Script ผ่าน Fetch API (POST หรือ GET)
+            fetch(`${SCRIPT_URL}?action=search&keyword=${encodeURIComponent(keyword)}`)
+                .then(res => res.json())
+                .then(response => {
+                    if (response.success && response.data.length > 0) {
+                        let html = '';
+                        response.data.forEach((item, index) => {
+                            let isReceived = item.isReceived;
+                            html += `
+                                <div class="border border-gray-200 rounded-xl p-4 bg-gray-50 space-y-3">
+                                    <div class="flex justify-between items-center">
+                                        <span class="font-semibold text-gray-800 text-lg">ผลการค้นหาที่ ${index + 1}</span>
+                                        <span class="px-3 py-1 text-xs rounded-full ${isReceived ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}">
+                                            ${isReceived ? 'มารับของแล้ว' : 'ยังไม่ได้รับของ'}
+                                        </span>
+                                    </div>
+                                    <div class="grid grid-cols-2 gap-2 text-sm text-gray-600 bg-white p-3 rounded-lg border">
+                            `;
+                            
+                            // วแสดงข้อมูลคอลัมน์ทั้งหมดในแถวนั้น
+                            for (let key in item) {
+                                if (key !== 'isReceived') {
+                                    html += `<div><span class="font-medium text-gray-700">${key}:</span> ${item[key]}</div>`;
+                                }
+                            }
+
+                            html += `
+                                    </div>
+                            `;
+
+                            if (!isReceived) {
+                                html += `
+                                    <button onclick='claimItem(${JSON.stringify(item)})' 
+                                        class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 rounded-lg transition duration-200 shadow">
+                                        กดรับผ้าคาด
+                                    </button>
+                                `;
+                            } else {
+                                html += `
+                                    <button disabled class="w-full bg-gray-300 text-gray-500 font-medium py-2.5 rounded-lg cursor-not-allowed">
+                                        รับของไปแล้วเรียบร้อย
+                                    </button>
+                                `;
+                            }
+
+                            html += `</div>`;
+                        });
+                        container.innerHTML = html;
+                    } else {
+                        container.innerHTML = `<div class="text-center py-4 text-red-500 font-medium">ไม่พบข้อมูลที่คุณค้นหา กรุณาตรวจสอบใหม่อีกครั้ง</div>`;
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    container.innerHTML = `<div class="text-center py-4 text-red-500">เกิดข้อผิดพลาดในการเชื่อมต่อระบบ</div>`;
+                });
+        }
+
+        function claimItem(itemData) {
+            if (!confirm("ยืนยันการกดรับผ้าคาดรายการนี้?")) return;
+
+            const primaryId = Object.values(itemData)[0]; // ดึงค่าคอลัมน์แรกเป็น ID อ้างอิง
+
+            fetch(SCRIPT_URL, {
+                method: 'POST',
+                body: JSON.stringify({ action: 'claim', id: primaryId, details: itemData })
+            })
+            .then(res => res.json())
+            .then(response => {
+                if (response.success) {
+                    alert("บันทึกการรับของสำเร็จ!");
+                    handleSearch(); // รีเฟรชผลการค้นหาเพื่อให้ปุ่มเปลี่ยนสถานะ
+                } else {
+                    alert("เกิดข้อผิดพลาด: " + response.message);
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                alert("ไม่สามารถบันทึกข้อมูลได้");
+            });
+        }
+    </script>
 </body>
 </html>
