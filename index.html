@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ระบบเช็กรายการรับผ้าคาด</title>
-    <!-- ฟอนต์ Prompt -->
+    <!-- Google Fonts: Prompt -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -29,7 +29,7 @@
             box-sizing: border-box;
             margin: 0;
             padding: 0;
-            font-family: 'Prompt', sans-serif;
+            font-family: 'Prompt', -apple-system, BlinkMacSystemFont, sans-serif;
         }
 
         body {
@@ -106,6 +106,7 @@
             border-radius: 12px;
             font-size: 1rem;
             outline: none;
+            color: var(--text-main);
         }
 
         .search-input:focus {
@@ -217,6 +218,7 @@
             padding: 4px 10px;
             border-radius: 8px;
             font-size: 1.1rem;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
         }
 
         .card-footer {
@@ -258,7 +260,6 @@
 <body>
 
     <div class="container">
-        <!-- หัวข้อระบบ -->
         <div class="header">
             <h1>📦 ระบบเช็กรายการรับผ้าคาด</h1>
             <div class="status-badge">
@@ -267,7 +268,6 @@
             </div>
         </div>
 
-        <!-- กล่องค้นหา -->
         <div class="search-box">
             <label class="search-label" for="searchInput">กรอกรหัสนักศึกษา หรือ ชื่อ-นามสกุล:</label>
             <div class="input-group">
@@ -276,12 +276,10 @@
             </div>
         </div>
 
-        <!-- แสดงเมื่อหาไม่พบ -->
         <div id="emptyState" class="empty-state">
             ⚠️ ไม่พบข้อมูลนักศึกษา กรุณาตรวจสอบรหัสหรือชื่ออีกครั้ง
         </div>
 
-        <!-- ผลการค้นหา -->
         <div id="resultCard" class="result-card">
             <div class="student-header">
                 <div>
@@ -321,7 +319,7 @@
         const itemsGrid = document.getElementById('itemsGrid');
         const btnConfirm = document.getElementById('btnConfirm');
 
-        // โหลดข้อมูล CSV เมื่อเปิดหน้าเว็บ
+        // โหลดไฟล์ CSV
         window.addEventListener('DOMContentLoaded', () => {
             Papa.parse(CSV_URL, {
                 download: true,
@@ -338,7 +336,6 @@
             });
         });
 
-        // ปุ่มค้นหา
         btnSearch.addEventListener('click', handleSearch);
         searchInput.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') handleSearch();
@@ -352,12 +349,11 @@
                 resultCard.style.display = 'none';
                 emptyState.style.display = 'none';
 
+                // ค้นหาคำค้นจากทุกคอลัมน์ในแถว
                 const matched = sheetData.find(row => {
-                    const keys = Object.keys(row);
-                    if (keys.length < 2) return false;
-                    const idVal = String(row[keys[0]] || '').trim().toLowerCase();
-                    const nameVal = String(row[keys[1]] || '').trim().toLowerCase();
-                    return idVal.includes(query) || nameVal.includes(query);
+                    return Object.values(row).some(val => 
+                        String(val || '').trim().toLowerCase().includes(query)
+                    );
                 });
 
                 if (matched) {
@@ -375,28 +371,61 @@
 
         function renderStudentCard(data) {
             const keys = Object.keys(data);
-            const studentId = data[keys[0]] || '-';
-            const studentName = data[keys[1]] || '-';
+            
+            // ค้นหาคอลัมน์รหัสนักศึกษาและชื่ออัตโนมัติ
+            let studentId = '-';
+            let studentName = '-';
+
+            keys.forEach(k => {
+                const val = String(data[k] || '').trim();
+                const lk = k.toLowerCase();
+                // เช็ครหัสนักศึกษา (ตัวเลข 8-10 หลัก)
+                if (lk.includes('รหัส') || (/^\d{8,10}$/.test(val))) {
+                    if (studentId === '-') studentId = val;
+                }
+                // เช็คชื่อ-นามสกุล
+                else if (lk.includes('ชื่อ') || lk.includes('นามสกุล') || lk.includes('name')) {
+                    if (studentName === '-') studentName = val;
+                }
+            });
+
+            // สำรองหากหาคอลัมน์ไม่เจอ ให้ใช้คอลัมน์ตำแหน่ง 0 และ 1
+            if (studentId === '-') studentId = data[keys[0]] || '-';
+            if (studentName === '-') studentName = data[keys[1]] || '-';
 
             resStudentId.textContent = studentId;
             resStudentName.textContent = studentName;
 
             itemsGrid.innerHTML = '';
-            
-            // กรองเฉพาะคอลัมน์ที่เป็นผ้าคาด (เช่น มีคำว่า สี หรือ ผืน)
-            keys.forEach((key, index) => {
-                if (index < 2) return;
-                const lowerKey = key.toLowerCase();
+
+            // รายชื่อคำที่ไม่ใช่ผ้าคาด ให้กรองทิ้ง
+            const ignoreKeywords = [
+                'เวลา', 'timestamp', 'date', 'ตรวจ', 'สถานะ', 'mail', 
+                'เบอร์', 'โทร', 'สลิป', 'ออเดอร์', 'รวม', 'ยอด', '_1', '_2', '_3',
+                'รหัส', 'ชื่อ', 'นามสกุล', 'ชั้นปี'
+            ];
+
+            keys.forEach(key => {
                 const val = String(data[key] || '').trim();
-                
-                if ((lowerKey.includes('สี') || lowerKey.includes('ผืน')) && val && val !== '-' && val !== '0') {
-                    const itemCard = document.createElement('div');
-                    itemCard.className = 'item-card';
-                    itemCard.innerHTML = `
-                        <span class="item-name">${key}</span>
-                        <span class="item-count">${val}</span>
-                    `;
-                    itemsGrid.appendChild(itemCard);
+                const lowerKey = key.toLowerCase();
+
+                // ข้ามคอลัมน์ที่เป็นข้อมูลส่วนตัว/การเงิน/วันที่/ตรวจแล้ว
+                const isIgnored = ignoreKeywords.some(kw => lowerKey.includes(kw)) ||
+                                  /^\d{1,2}\/\d{1,2}\/\d{4}/.test(val) ||
+                                  val === 'ตรวจแล้ว';
+
+                if (!isIgnored) {
+                    const numVal = parseFloat(val);
+                    // แสดงเฉพาะคอลัมน์ที่มีจำนวนสั่งซื้อ
+                    if (val && val !== '-' && (isNaN(numVal) || numVal > 0)) {
+                        const itemCard = document.createElement('div');
+                        itemCard.className = 'item-card';
+                        itemCard.innerHTML = `
+                            <span class="item-name">${key}</span>
+                            <span class="item-count">${val}</span>
+                        `;
+                        itemsGrid.appendChild(itemCard);
+                    }
                 }
             });
 
@@ -414,7 +443,7 @@
                 statusBadge.className = 'receive-status done';
                 statusBadge.textContent = '✅ รับผ้าคาดเรียบร้อยแล้ว';
                 btnConfirm.disabled = true;
-                btnConfirm.textContent = '✔ บันทึกแล้ว';
+                btnConfirm.textContent = '✔ รับของเรียบร้อยแล้ว';
             } else {
                 statusBadge.className = 'receive-status pending';
                 statusBadge.textContent = '⏳ ยังไม่ได้รับผ้าคาด';
@@ -423,11 +452,9 @@
             }
         }
 
-        // ปุ่มกดรับของ
         btnConfirm.addEventListener('click', () => {
             if (!currentStudent) return;
-            const keys = Object.keys(currentStudent);
-            const studentId = currentStudent[keys[0]];
+            const studentId = resStudentId.textContent;
             
             localStorage.setItem(`received_${studentId}`, 'true');
             setCardReceivedState(true);
